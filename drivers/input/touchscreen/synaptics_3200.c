@@ -170,7 +170,7 @@ extern uint8_t touchscreen_is_on(void)
 } 
 
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-int s2w_switch = 1;
+int s2w_switch = 0;
 bool exec_count = true;
 bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
@@ -3471,7 +3471,7 @@ static int syn_probe_init(void *arg)
 	}
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_STOP_DRAWING + 5;
+	ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 5;
 	ts->early_suspend.suspend = synaptics_ts_early_suspend;
 	ts->early_suspend.resume = synaptics_ts_late_resume;
 	register_early_suspend(&ts->early_suspend);
@@ -3632,7 +3632,6 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	if (s2w_switch > 0) {
 	      
 		enable_irq_wake(ts->client->irq);
-		ts->irq_enabled = 1;
 		printk(KERN_INFO "[sweep2wake]: suspend but keep interupt wake going.\n");
 		if (s2w_switch == 2) {
 			//ensure backlight is turned off
@@ -3872,7 +3871,6 @@ static int synaptics_ts_resume(struct i2c_client *client)
                 //screen on, disable_irq_wake
                 scr_suspended = false;
                 disable_irq_wake(ts->client->irq);
-		ts->irq_enabled = 0;
         }
 #endif
 	printk(KERN_INFO "[TP] %s: enter\n", __func__);
