@@ -106,6 +106,8 @@ struct pm8xxx_led_data {
 	void (*gpio_status_switch)(bool);
 	int		(*lpm_power)(int on);
 };
-void pm8xxx_led_current_set_for_key(int brightness_key);
+extern void pm8xxx_led_current_set_for_key(int brightness_key);
+extern void pm8xxx_led_current_set(struct led_classdev *led_cdev,
+				   enum led_brightness brightness);
 
 #endif 

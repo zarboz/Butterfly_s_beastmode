@@ -174,7 +174,7 @@ int s2w_switch = 1;
 bool exec_count = true;
 bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
-//static struct led_classdev * sweep2wake_leddev;
+static struct led_classdev * sweep2wake_leddev;
 static DEFINE_MUTEX(pwrlock);
 
 #ifdef CONFIG_CMDLINE_OPTIONS
@@ -203,13 +203,13 @@ extern void sweep2wake_setdev(struct input_dev * input_device) {
 	return;
 }
 EXPORT_SYMBOL(sweep2wake_setdev);
-/*
+
 extern void sweep2wake_setleddev(struct led_classdev * led_dev) {
 	sweep2wake_leddev = led_dev;
 	return;
 }
 EXPORT_SYMBOL(sweep2wake_setleddev);
-*/
+
 static void sweep2wake_presspwr(struct work_struct * sweep2wake_presspwr_work) {
 	input_event(sweep2wake_pwrdev, EV_KEY, KEY_POWER, 1);
 	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
@@ -2242,7 +2242,7 @@ static void synaptics_ts_finger_func(struct synaptics_ts_data *ts)
 			    	(led_exec_count == false) &&
 			    	(scr_on_touch == false) &&
 			    	(exec_count == true)) {
-				//	pm8xxx_led_current_set(sweep2wake_leddev, 0);
+					pm8xxx_led_current_set(sweep2wake_leddev, 0);
 					printk(KERN_INFO "[sweep2wake]: deactivated button backlight.\n");
 				}
 				exec_count = true;
@@ -2422,7 +2422,7 @@ static void synaptics_ts_finger_func(struct synaptics_ts_data *ts)
 								    (finger_data[i][0] < nextx) &&
 								    (finger_data[i][1] > 2725))) {
 						if ((led_exec_count == true) && (scr_on_touch == false) && (s2w_switch == 2)) {
- 					//	pm8xxx_led_current_set(sweep2wake_leddev, 255);
+ 						pm8xxx_led_current_set(sweep2wake_leddev, 255);
 						printk(KERN_INFO "[sweep2wake]: activated button backlight.\n");
 						led_exec_count = false;
 						}
@@ -3635,7 +3635,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		printk(KERN_INFO "[sweep2wake]: suspend but keep interupt wake going.\n");
 		if (s2w_switch == 2) {
 			//ensure backlight is turned off
-			//pm8xxx_led_current_set(sweep2wake_leddev, 0);
+			pm8xxx_led_current_set(sweep2wake_leddev, 0);
 			printk(KERN_INFO "[sweep2wake]: deactivated button backlight.\n");
 		}
  	} 
@@ -3768,9 +3768,6 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	}
 	else if(ts->psensor_detection)
 		ts->psensor_phone_enable = 1;
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
-#endif
 #ifdef CONFIG_PWRKEY_STATUS_API
 	if (ts->packrat_number < SYNAPTICS_FW_NOCAL_PACKRAT)
 		printk(KERN_INFO "[TP][PWR][STATE] get power key state = %d\n", getPowerKeyState());
@@ -3855,9 +3852,6 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		if (ts->lpm_power)
 			ts->lpm_power(1);
 	}
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        }
-#endif
 	return 0;
 }
 
