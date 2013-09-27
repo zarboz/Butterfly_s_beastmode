@@ -171,7 +171,7 @@ extern uint8_t touchscreen_is_on(void)
 
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
 int s2w_wakestat = 0;
-int s2w_switch = 1;
+int s2w_switch = 0;
 bool exec_count = true;
 bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
