@@ -3632,6 +3632,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	if (s2w_switch > 0) {
 	      
 		enable_irq_wake(client->irq);
+		ts->irq_enabled = 1;
 		printk(KERN_INFO "[sweep2wake]: suspend but keep interupt wake going.\n");
 		if (s2w_switch == 2) {
 			//ensure backlight is turned off
@@ -3768,6 +3769,9 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	}
 	else if(ts->psensor_detection)
 		ts->psensor_phone_enable = 1;
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+        if (s2w_switch == 0) {
+#endif
 #ifdef CONFIG_PWRKEY_STATUS_API
 	if (ts->packrat_number < SYNAPTICS_FW_NOCAL_PACKRAT)
 		printk(KERN_INFO "[TP][PWR][STATE] get power key state = %d\n", getPowerKeyState());
@@ -3852,6 +3856,9 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		if (ts->lpm_power)
 			ts->lpm_power(1);
 	}
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+        }
+#endif
 	return 0;
 }
 
@@ -3865,6 +3872,7 @@ static int synaptics_ts_resume(struct i2c_client *client)
                 //screen on, disable_irq_wake
                 scr_suspended = false;
                 disable_irq_wake(client->irq);
+		ts->irq_enabled = 0;
         }
 #endif
 	printk(KERN_INFO "[TP] %s: enter\n", __func__);
