@@ -3631,7 +3631,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
 	scr_suspended = true;
-	if (s2w_switch == 1 || dt2w_switch == 1 || l2w_switch == 1) {
+	if (s2w_switch == 1) {
 		//screen off, enable_irq_wake
 		enable_irq_wake(ts->client->irq);
 		s2w_wakestat = 1;
@@ -3644,7 +3644,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 	if (ts->use_irq) {
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-		if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
+		if ((s2w_switch == 0)) {
 #endif
 		disable_irq(client->irq);
 		ts->irq_enabled = 0;
@@ -3655,7 +3655,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		hrtimer_cancel(&ts->timer);
 		ret = cancel_work_sync(&ts->work);
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-	if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
+	if ((s2w_switch == 0)) {
 		if (ret && ts->use_irq) /* if work was pending disable-count is now 2 */
 			enable_irq(client->irq);
 	}
@@ -3772,7 +3772,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 
 
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-	if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
+	if (( s2w_switch == 0)) {
 #endif
 
 	if (ts->power)
@@ -3814,7 +3814,7 @@ static int synaptics_ts_resume(struct i2c_client *client)
                 //screen on, disable_irq_wake
                 scr_suspended = false;
 	if (s2w_wakestat == 1) 
-		disable_irq_wake(client->irq);
+		disable_irq_wake(ts->client->irq);
 #endif
 
 	printk(KERN_INFO "[TP] %s: enter\n", __func__);
