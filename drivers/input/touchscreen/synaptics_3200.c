@@ -3628,10 +3628,19 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	uint8_t data = 0, update = 0;
 	struct synaptics_ts_data *ts = i2c_get_clientdata(client);
 	scr_suspended = true;
-	
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE      
 	if (s2w_switch > 0) {
-	      
+	      /* HW revision fix, this is not needed for all touch controllers!
+		 * suspend me for a short while, so that resume can wake me up the right way
+		 *
+		 *
+		 */
+		ret = i2c_syn_write_byte_data(client,
+			get_address_base(ts, 0x01, CONTROL_BASE), 0x01); /* sleep */
+		if (ret < 0)
+			i2c_syn_error_handler(ts, 1, "sleep", __func__);
+		msleep(150);
+		ret = 0;
 		enable_irq_wake(client->irq);
 		ts->irq_enabled = 1;
 		printk(KERN_INFO "[sweep2wake]: suspend but keep interupt wake going.\n");
@@ -3639,7 +3648,6 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 			//ensure backlight is turned off
 			pm8xxx_led_current_set(sweep2wake_leddev, 0);
 			printk(KERN_INFO "[sweep2wake]: deactivated button backlight.\n");
-			printk(KERN_INFO "[sweep2wake]: Screen Suspended %d \n", scr_suspended);
 		}
  	} 
 #endif
@@ -3657,7 +3665,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	} else {
 		hrtimer_cancel(&ts->timer);
 		ret = cancel_work_sync(&ts->work);
-#ifdef CONFIG_SYNAPTICS_SWEEP2WAKE
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
         if (s2w_switch == 0) {
                 if (ret && ts->use_irq) /* if work was pending disable-count is now 2 */
                         enable_irq(client->irq);
@@ -3771,7 +3779,9 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	}
 	else if(ts->psensor_detection)
 		ts->psensor_phone_enable = 1;
-
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+        if (s2w_switch == 0) {
+#endif
 #ifdef CONFIG_PWRKEY_STATUS_API
 	if (ts->packrat_number < SYNAPTICS_FW_NOCAL_PACKRAT)
 		printk(KERN_INFO "[TP][PWR][STATE] get power key state = %d\n", getPowerKeyState());
@@ -3827,9 +3837,7 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		}
 		ts->disable_CBC = 0;
 	}
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
-#endif
+
 	if (ts->power)
 		ts->power(0);
 	else {
@@ -3871,18 +3879,6 @@ static int synaptics_ts_resume(struct i2c_client *client)
 	scr_suspended = true;
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE  
         if (s2w_switch > 0) {
-				/* HW revision fix, this is not needed for all touch controllers!
-			 * suspend me for a short while, so that resume can wake me up the right way
-			 *
-			 * --NO IDEA IF THIS IS NEEDED ON THE ONE X, INCLUDE IT TO BE SURE FOR NOW!--
-			 *
-			 */
-			ret = i2c_syn_write_byte_data(client,
-				get_address_base(ts, 0x01, CONTROL_BASE), 0x01); /* sleep */
-			if (ret < 0)
-				i2c_syn_error_handler(ts, 1, "sleep", __func__);
-			msleep(150);
-			ret = 0;
                 //screen on, disable_irq_wake
                 scr_suspended = false;
                 disable_irq_wake(client->irq);
