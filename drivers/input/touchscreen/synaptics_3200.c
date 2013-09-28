@@ -170,6 +170,7 @@ extern uint8_t touchscreen_is_on(void)
 } 
 
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
+int s2w_wakestat = 0;
 int s2w_switch = 0;
 bool exec_count = true;
 bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
@@ -3440,7 +3441,7 @@ static int syn_probe_init(void *arg)
 	if (ts->client->irq) {
 		ts->use_irq = 1;
 		ret = request_threaded_irq(ts->client->irq, NULL, synaptics_irq_thread,
-			IRQF_TRIGGER_LOW | IRQF_ONESHOT, ts->client->name, ts);
+			IRQF_TRIGGER_LOW | IRQF_ONESHOT | IRQF_IRQPOLL | IRQF_NO_SUSPEND, ts->client->name, ts);
 		if (ret == 0) {
 			ts->irq_enabled = 1;
 			ret = i2c_syn_read(ts->client,
@@ -3622,29 +3623,28 @@ static int synaptics_ts_remove(struct i2c_client *client)
 	return 0;
 }
 
+
 static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 {
 	int ret = 0;
-	uint8_t data = 0, update = 0;
 	struct synaptics_ts_data *ts = i2c_get_clientdata(client);
+
+#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
 	scr_suspended = true;
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE      
-	if (s2w_switch > 0) {
-	      
+	if (s2w_switch == 1 || dt2w_switch == 1 || l2w_switch == 1) {
+		//screen off, enable_irq_wake
 		enable_irq_wake(ts->client->irq);
-		printk(KERN_INFO "[sweep2wake]: suspend but keep interupt wake going.\n");
-		if (s2w_switch == 2) {
-			//ensure backlight is turned off
-			pm8xxx_led_current_set(sweep2wake_leddev, 0);
-			printk(KERN_INFO "[sweep2wake]: deactivated button backlight.\n");
-		}
- 	} 
+		s2w_wakestat = 1;
+	} else {
+		s2w_wakestat = 0;
+	}
 #endif
+
 	printk(KERN_INFO "[TP] %s: enter\n", __func__);
 
 	if (ts->use_irq) {
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-                if (s2w_switch == 0) {
+		if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
 #endif
 		disable_irq(client->irq);
 		ts->irq_enabled = 0;
@@ -3655,10 +3655,10 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		hrtimer_cancel(&ts->timer);
 		ret = cancel_work_sync(&ts->work);
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
-                if (ret && ts->use_irq) /* if work was pending disable-count is now 2 */
-                        enable_irq(client->irq);
-        }
+	if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
+		if (ret && ts->use_irq) /* if work was pending disable-count is now 2 */
+			enable_irq(client->irq);
+	}
 #endif
 	}
 
@@ -3768,79 +3768,23 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	}
 	else if(ts->psensor_detection)
 		ts->psensor_phone_enable = 1;
+
+
+
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
+	if ((s2w_switch == 2 || s2w_switch == 0) && dt2w_switch == 0 && l2w_switch == 0) {
 #endif
-#ifdef CONFIG_PWRKEY_STATUS_API
-	if (ts->packrat_number < SYNAPTICS_FW_NOCAL_PACKRAT)
-		printk(KERN_INFO "[TP][PWR][STATE] get power key state = %d\n", getPowerKeyState());
-#endif
-	if (ts->disable_CBC) {
-		if (ts->package_id < 3400) {
-			ret = i2c_syn_read(ts->client,
-				get_address_base(ts, 0x54, CONTROL_BASE) + 0x07, &data, 1);
-			if ((data & 0x10) == 0) {
-				printk(KERN_INFO "[TP] %s: CBC disabled : %d", __func__, ts->package_id);
-				data |= 0x10;
-				ret = i2c_syn_write_byte_data(ts->client,
-					get_address_base(ts, 0x54, CONTROL_BASE) + 0x07, data);
-				update = 1;
-			}
-		} else {
-			ret = i2c_syn_read(ts->client,
-				get_address_base(ts, 0x54, CONTROL_BASE) + 0x1E, &data, 1);
-			if ((data & 0x20) == 0) {
-				printk(KERN_INFO "[TP] %s: CBC disabled : %d", __func__, ts->package_id);
-				data |= 0x20;
-				ret = i2c_syn_write_byte_data(ts->client,
-					get_address_base(ts, 0x54, CONTROL_BASE) + 0x1E, data);
-				update = 1;
-			}
-		}
-		if (ts->button) {
-			if (ts->package_id < 3400) {
-				ret = i2c_syn_read(ts->client,
-					get_address_base(ts, 0x54, CONTROL_BASE) + 0x56, &data, 1);
-				if ((data & 0x10) == 0) {
-					printk(KERN_INFO "[TP] %s: 0D CBC disabled : %d", __func__, ts->package_id);
-					data |= 0x10;
-					ret = i2c_syn_write_byte_data(ts->client,
-						get_address_base(ts, 0x54, CONTROL_BASE) + 0x56, data);
-					update = 1;
-				}
-			} else {
-				ret = i2c_syn_read(ts->client,
-					get_address_base(ts, 0x54, CONTROL_BASE) + 0x19, &data, 1);
-				if ((data & 0x10) == 0) {
-					printk(KERN_INFO "[TP] %s: 0D CBC disabled : %x", __func__, ts->package_id);
-					data |= 0x10;
-					ret = i2c_syn_write_byte_data(ts->client,
-					get_address_base(ts, 0x54, CONTROL_BASE) + 0x19, data);
-					update = 1;
-				}
-			}
-		}
-		if (update) {
-			ret = i2c_syn_write_byte_data(ts->client,
-				get_address_base(ts, 0x54, COMMAND_BASE), 0x04);
-		}
-		ts->disable_CBC = 0;
-	}
 
 	if (ts->power)
 		ts->power(0);
 	else {
-		if (ts->packrat_number >= SYNAPTICS_FW_2IN1_PACKRAT) {
+		if (ts->packrat_number >= SYNAPTICS_FW_NOCAL_PACKRAT) {
 			ret = i2c_syn_write_byte_data(client,
-				get_address_base(ts, 0x01, CONTROL_BASE), 0x01); 
+					get_address_base(ts, 0x01, CONTROL_BASE), 0x01); 
 			if (ret < 0)
 				i2c_syn_error_handler(ts, ts->i2c_err_handler_en, "sleep: 0x01", __func__);
 		} else {
-			if (ts->psensor_status > 0
-#ifdef CONFIG_PWRKEY_STATUS_API
-			&& getPowerKeyState() == 0
-#endif
-			 ) {
+			if (ts->psensor_status > 0) {
 				ret = i2c_syn_write_byte_data(client,
 					get_address_base(ts, 0x01, CONTROL_BASE), 0x02); 
 				if (ret < 0)
@@ -3856,30 +3800,28 @@ static int synaptics_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 			ts->lpm_power(1);
 	}
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        }
+	}
 #endif
 	return 0;
 }
 
 static int synaptics_ts_resume(struct i2c_client *client)
 {
-	int ret, i;
+	int ret;
 	struct synaptics_ts_data *ts = i2c_get_clientdata(client);
-	scr_suspended = true;
+
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE  
-        if (s2w_switch > 0) {
                 //screen on, disable_irq_wake
                 scr_suspended = false;
-                disable_irq_wake(ts->client->irq);
-        }
+	if (s2w_wakestat == 1) 
+		disable_irq_wake(client->irq);
 #endif
+
 	printk(KERN_INFO "[TP] %s: enter\n", __func__);
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
-#endif
+
 	if (ts->power) {
 		ts->power(1);
-		hr_msleep(100);
+		msleep(100);
 #ifdef SYN_CABLE_CONTROL
 		if (ts->cable_support) {
 			if (usb_get_connect_type())
@@ -3895,9 +3837,7 @@ static int synaptics_ts_resume(struct i2c_client *client)
 		if (ret < 0)
 			i2c_syn_error_handler(ts, ts->i2c_err_handler_en, "wake up", __func__);
 	}
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        }
-#endif
+
 	if (ts->htc_event == SYN_AND_REPORT_TYPE_A) {
 		if (ts->support_htc_event) {
 			input_report_abs(ts->input_dev, ABS_MT_AMPLITUDE, 0);
@@ -3906,17 +3846,6 @@ static int synaptics_ts_resume(struct i2c_client *client)
 		}
 		input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, 0);
 		input_sync(ts->input_dev);
-	} else if (ts->htc_event == SYN_AND_REPORT_TYPE_B) {
-		if (ts->package_id >= 3400) {
-			for (i = 0; i < ts->finger_support; i++) {
-				input_mt_slot(ts->input_dev, i);
-				input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 0);
-				input_sync(ts->input_dev);
-				
-			}
-			ts->tap_suppression = 0;
-			ts->finger_pressed = 0;
-		}
 	} else if (ts->htc_event == SYN_AND_REPORT_TYPE_HTC) {
 		input_report_abs(ts->input_dev, ABS_MT_AMPLITUDE, 0);
 		input_report_abs(ts->input_dev, ABS_MT_POSITION, 1 << 31);
@@ -3934,18 +3863,14 @@ static int synaptics_ts_resume(struct i2c_client *client)
 			ts->psensor_phone_enable = 1;
 		}
 	}
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-        if (s2w_switch == 0) {
-#endif
+
 	if (ts->use_irq) {
 		enable_irq(client->irq);
 		ts->irq_enabled = 1;
 	}
 	else
 		hrtimer_start(&ts->timer, ktime_set(1, 0), HRTIMER_MODE_REL);
-#ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
-	}
-#endif
+
 	return 0;
 }
 

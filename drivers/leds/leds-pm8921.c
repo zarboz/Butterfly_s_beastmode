@@ -29,6 +29,7 @@
 #ifdef CONFIG_TOUCHSCREEN_SYNAPTICS_SWEEP2WAKE
 #include <linux/synaptics_i2c_rmi.h>
 #endif
+#include <linux/synaptics_i2c_rmi.h>
 
 #include <linux/input.h>
 
